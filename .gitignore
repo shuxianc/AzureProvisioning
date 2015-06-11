@@ -1,5 +1,7 @@
 /AzureProvisioning/packages
 /AzureProvisioning/AzureProvisioning/bin
 /AzureProvisioning/AzureProvisioning/obj
+/AzureProvisioning/AzureProvisioningTest/bin
+/AzureProvisioning/AzureProvisioningTest/obj
 *.suo
 Thumbs.db
