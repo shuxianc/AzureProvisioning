@@ -3,5 +3,6 @@
 /AzureProvisioning/AzureProvisioning/obj
 /AzureProvisioning/AzureProvisioningTest/bin
 /AzureProvisioning/AzureProvisioningTest/obj
+/AzureProvisioning/TestResults
 *.suo
 Thumbs.db
