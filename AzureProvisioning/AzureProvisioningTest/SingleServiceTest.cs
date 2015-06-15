@@ -12,6 +12,9 @@ using System.Net;
 using Microsoft.WindowsAzure.Management.Storage;
 using Microsoft.WindowsAzure.Management.Storage.Models;
 using Microsoft.WindowsAzure.Storage;
+using Microsoft.WindowsAzure.Management.ServiceBus;
+using Microsoft.ServiceBus;
+using Microsoft.ServiceBus.Messaging;
 
 namespace AzureProvisioningTest
 {
@@ -30,7 +33,6 @@ namespace AzureProvisioningTest
         private const string ADRedirectUri = @"<your redirect url>";
         private const string ADClientID = @"<your client id>";
         private const string SubscriptionID = @"<your subscription id>";
-
 
         [ClassInitialize()]
         public static void ClassInit(TestContext context)
@@ -75,7 +77,7 @@ namespace AzureProvisioningTest
             using (var smc = new StorageManagementClient(cred))
             {
                 var result = smc.StorageAccounts.Get(stost.Name);
-                Assert.IsTrue(result.StorageAccount.Properties.Status == StorageAccountStatus.Created);
+                Assert.IsTrue(result.StorageAccount.Properties.Status == StorageAccountStatus.Created); // Ensure storage account is created
             }
             var connectionString = String.Format("DefaultEndpointsProtocol=https;AccountName={0};AccountKey={1}",
                         bcst.StorageAccountName, bcst.StorageAccountKey);
@@ -83,9 +85,35 @@ namespace AzureProvisioningTest
             var blobs = account.CreateCloudBlobClient();
             var container = blobs.GetContainerReference(bcst.Name);
             r = container.Exists();
-            Assert.IsTrue(r);
+            Assert.IsTrue(r); // Ensure blob container is created
 
             r = CleanupHelper.CleanupResource(cred, stost).Result;
+            Assert.IsTrue(r);
+        }
+
+        [TestMethod]
+        public void TestEventHubCreation()
+        {
+            var sbst = new ServiceBusNamespaceSetting("sb" + suffix, LayerType.Ingestion, testLocation);
+            var ehst = new EventHubSetting("eh" + suffix, LayerType.Ingestion, testLocation, 8);
+            var nodesb = new Vertex<ResourceSetting>(sbst);
+            var nodeeh = new Vertex<ResourceSetting>(ehst);
+            nodesb.AddChild(nodeeh);
+
+            var allTask = factory.ResolveTasks(cred, new List<Vertex<ResourceSetting>>() { nodesb });
+            var r = allTask.ServiceCreated.GetAwaiter().GetResult().Result;
+            Assert.IsTrue(r);
+
+            using (var smc = new ServiceBusManagementClient(cred))
+            {
+                var result = smc.Namespaces.Get(sbst.Name).Namespace;
+                Assert.IsTrue(result.Status == "Active"); // Ensure service bus namespace is active
+            }
+            var nm = NamespaceManager.CreateFromConnectionString(sbst.ConnectionString);
+            var des = nm.GetEventHub(ehst.Name);
+            Assert.IsTrue(des.Status == EntityStatus.Active); // Ensure event hub is active
+
+            r = CleanupHelper.CleanupResource(cred, sbst).Result;
             Assert.IsTrue(r);
         }
 

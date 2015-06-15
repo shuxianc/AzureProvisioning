@@ -1,6 +1,7 @@
 ﻿using AzureProvisioning.ResourceSettings;
 using Microsoft.Azure;
 using Microsoft.Azure.Management.Resources;
+using Microsoft.WindowsAzure.Management.ServiceBus;
 using Microsoft.WindowsAzure.Management.Storage;
 using System;
 using System.Collections.Generic;
@@ -30,6 +31,14 @@ namespace AzureProvisioning
                 using (var smc = new StorageManagementClient(cred))
                 {
                     var result = await smc.StorageAccounts.DeleteAsync(resource.Name);
+                    succeeded = result.StatusCode == HttpStatusCode.OK;
+                }
+            }
+            else if (resource is ServiceBusNamespaceSetting)
+            {
+                using (var smc = new ServiceBusManagementClient(cred))
+                {
+                    var result = await smc.Namespaces.DeleteAsync(resource.Name);
                     succeeded = result.StatusCode == HttpStatusCode.OK;
                 }
             }
