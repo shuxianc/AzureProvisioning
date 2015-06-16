@@ -15,6 +15,8 @@ using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Management.ServiceBus;
 using Microsoft.ServiceBus;
 using Microsoft.ServiceBus.Messaging;
+using Microsoft.Azure.Management.StreamAnalytics;
+using Microsoft.Azure.Management.StreamAnalytics.Models;
 
 namespace AzureProvisioningTest
 {
@@ -23,7 +25,6 @@ namespace AzureProvisioningTest
     {
         private static AzureTaskFactory factory = AzureTaskFactory.Instance;
         private static string testLocation = "Central US";
-        private static string suffix = DateTime.Now.ToString("HHmm");
         private static TokenCloudCredentials cred = null;
         
         // Refer to the link to setup AAD for your subscription:
@@ -44,6 +45,10 @@ namespace AzureProvisioningTest
         [TestMethod]
         public void TestResourceGroupCreation()
         {
+            // Generate a unique suffix for naming of Azure services
+            Random rnd = new Random();
+            int suffix = rnd.Next(1000, 10000);
+
             var rgst = new ResourceGroupSetting("rg" + suffix, LayerType.Default, testLocation);
             var noderg = new Vertex<ResourceSetting>(rgst);
 
@@ -64,6 +69,10 @@ namespace AzureProvisioningTest
         [TestMethod]
         public void TestStorageCreation()
         {
+            // Generate a unique suffix for naming of Azure services
+            Random rnd = new Random();
+            int suffix = rnd.Next(1000, 10000);
+
             var stost = new StorageAccountSetting("sto" + suffix, LayerType.RawArchive, testLocation);
             var bcst = new BlobContainerSetting("bc" + suffix, LayerType.RawArchive, testLocation);
             var nodesto = new Vertex<ResourceSetting>(stost);
@@ -94,6 +103,10 @@ namespace AzureProvisioningTest
         [TestMethod]
         public void TestEventHubCreation()
         {
+            // Generate a unique suffix for naming of Azure services
+            Random rnd = new Random();
+            int suffix = rnd.Next(1000, 10000);
+
             var sbst = new ServiceBusNamespaceSetting("sb" + suffix, LayerType.Ingestion, testLocation);
             var ehst = new EventHubSetting("eh" + suffix, LayerType.Ingestion, testLocation, 8);
             var nodesb = new Vertex<ResourceSetting>(sbst);
@@ -112,6 +125,55 @@ namespace AzureProvisioningTest
             var nm = NamespaceManager.CreateFromConnectionString(sbst.ConnectionString);
             var des = nm.GetEventHub(ehst.Name);
             Assert.IsTrue(des.Status == EntityStatus.Active); // Ensure event hub is active
+
+            r = CleanupHelper.CleanupResource(cred, sbst).Result;
+            Assert.IsTrue(r);
+        }
+
+        [TestMethod]
+        public void TestStreamAnalyticsCreation()
+        {
+            // Generate a unique suffix for naming of Azure services
+            Random rnd = new Random();
+            int suffix = rnd.Next(1000, 10000);
+
+            var sbst = new ServiceBusNamespaceSetting("sb" + suffix, LayerType.Default, testLocation);
+            var ehst = new EventHubSetting("eh" + suffix, LayerType.Ingestion, testLocation, 8);
+            var nodesb = new Vertex<ResourceSetting>(sbst);
+            var nodeeh = new Vertex<ResourceSetting>(ehst);
+            nodesb.AddChild(nodeeh);
+
+            var stost = new StorageAccountSetting("sto" + suffix, LayerType.Default, testLocation);
+            var bcst = new BlobContainerSetting("bc" + suffix, LayerType.RawArchive, testLocation);
+            var nodesto = new Vertex<ResourceSetting>(stost);
+            var nodebc = new Vertex<ResourceSetting>(bcst);
+            nodesto.AddChild(nodebc);
+
+            var rgst = new ResourceGroupSetting("rg" + suffix, LayerType.Default, testLocation);
+            var sast = new StreamAnalyticsSetting("sa" + suffix, LayerType.Transformation, testLocation);
+            var noderg = new Vertex<ResourceSetting>(rgst);
+            var nodesa = new Vertex<ResourceSetting>(sast);
+            noderg.AddChild(nodesa);
+
+            nodeeh.AddChild(nodesa);
+            nodebc.AddChild(nodesa);
+
+            var allTask = factory.ResolveTasks(cred, new List<Vertex<ResourceSetting>>() { nodesb, nodesto, noderg });
+            var r = allTask.ServiceCreated.GetAwaiter().GetResult().Result;
+            Assert.IsTrue(r);
+
+            using (var smc = new StreamAnalyticsManagementClient(cred))
+            {
+                var result = smc.StreamingJobs.Get(rgst.Name, sast.Name,
+                    new JobGetParameters());
+                Assert.IsTrue(result.Job.Properties.JobState == "Idle");
+            }
+
+            r = CleanupHelper.CleanupResource(cred, rgst).Result;
+            Assert.IsTrue(r);
+
+            r = CleanupHelper.CleanupResource(cred, stost).Result;
+            Assert.IsTrue(r);
 
             r = CleanupHelper.CleanupResource(cred, sbst).Result;
             Assert.IsTrue(r);
